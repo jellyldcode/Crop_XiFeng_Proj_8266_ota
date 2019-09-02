@@ -93,11 +93,28 @@ _attribute_ram_code_ int main (void) {
 	LED_LOW;
 #endif
 
-
+	WriteAnalogReg (DEEP_ANA_REG6, 0xff);
+	
 	flash_read_page (NEW_FW_ADR, 256, buff);
-	int	n_firmware = *(u32 *)(buff + 0x18);
+	unsigned int n_firmware = *(u32 *)(buff + 0x18);
+	unsigned char key = (n_firmware & 0xff000000) >> 24;
+	n_firmware &= ~0xff000000;
 
-	if(n_firmware > (NEW_FW_SIZE<<10)){  //firmware too big, err
+	if(key != 0x12)
+	{
+		buff[0] = 0;
+		WriteAnalogReg (DEEP_ANA_REG6, 0xff);
+		flash_write_page (OTA_FLG_ADR, 1, buff);	//clear OTA flag
+		for (int i = (n_firmware-1)&0x1f000; i>=0; i-=4096)  //erase data on flash for next OTA
+		{
+			flash_erase_sector (NEW_FW_ADR + i);
+		}
+		REG_ADDR8(0x6f) = 0x20;   //mcu reboot
+		while (1);			
+	}
+
+	if(n_firmware > (NEW_FW_SIZE<<10))
+	{  //firmware too big, err
 		#if(DBG_LED_IND)  //for debug : indicate that firmware size ERR
 			LED_HIGH;
 		#endif
@@ -183,7 +200,7 @@ _attribute_ram_code_ int main (void) {
 	}
 #endif
 
-
+	WriteAnalogReg (DEEP_ANA_REG6, 0xff);
 	REG_ADDR8(0x6f) = 0x20;   //mcu reboot
 	while (1);
 }
